@@ -9,12 +9,59 @@ script.on_init(function()
   -- Store all the train that have been dispatched
   -- (we need to keep track of this in order to be able to reset the train schedule when it arrives at its destination)
   global.dispatched = {}
+
+  -- Store all the stations
+  -- (we need it for performance reasons)
+  global.stations = {}
 end)
 
--- Ensure the ticker is on when loading a map
+
+-- When map is loaded
 script.on_load(function()
-  activateTicker()
+  script.on_nth_tick(300, update_list_stations)
 end)
+
+
+-- When configuration is changed (new mod version, etc.)
+script.on_configuration_changed(function(data)
+  if data.mod_changes and data.mod_changes.Dispatcher then
+    local old_version = data.mod_changes.Dispatcher.old_version
+    local new_version = data.mod_changes.Dispatcher.new_version
+
+    -- If mod not activated before
+    if not old_version and new_version then
+      build_list_stations()
+    end
+
+    -- New mod version
+    if old_version and new_version then
+      if old_version < "1.0.1" then
+        build_list_stations()
+      end
+    end
+  end
+end)
+
+
+-- Add new stations to global.stations
+function entity_built(event)
+  if event.created_entity.name == "train-stop" or event.created_entity.name == "train-stop-dispatcher" then
+    global.stations[event.created_entity.backer_name] = event.created_entity
+  end
+end
+script.on_event(defines.events.on_built_entity, entity_built)
+script.on_event(defines.events.on_robot_built_entity, entity_built)
+
+
+-- Remove mined stations from global.stations
+function entity_removed(event)
+  if event.entity.name == "train-stop" or event.entity.name == "train-stop-dispatcher" then
+    global.stations[event.entity.backer_name] = nil
+  end
+end
+script.on_event(defines.events.on_player_mined_entity, entity_removed)
+script.on_event(defines.events.on_robot_mined_entity, entity_removed)
+script.on_event(defines.events.on_entity_died, entity_removed)
 
 
 -- Track train state change
@@ -40,25 +87,15 @@ function train_changed_state(event)
   if event.train.state == defines.train_state.wait_station and event.train.station.name == "train-stop-dispatcher" then
     -- Add the train to the global variable storing all the trains awaiting dispatch
     global.awaiting_dispatch[id] = {train=event.train, station=event.train.station, schedule=event.train.schedule}
+
     -- Change the train schedule so that the train stays at the station
     event.train.schedule = {current=1, records={{station=event.train.station.backer_name, wait_conditions={{type="circuit", compare_type="or", condition={}}}}}}
-    activateTicker()
   end
 end
 script.on_event(defines.events.on_train_changed_state, train_changed_state)
 
 
--- Activate/Deactivate ticker (every 4 ticks)
-function activateTicker()
-  if next(global.awaiting_dispatch) ~= nil then
-    script.on_nth_tick(4, tick)
-  else
-    script.on_nth_tick(nil)
-  end
-end
-
-
--- Executed every 4 ticks
+-- Executed every tick
 function tick()
   for i,v in pairs(global.awaiting_dispatch) do
 
@@ -77,44 +114,61 @@ function tick()
       local signal = get_signal(v.station, SIGNAL_DISPATCH)
 
       if signal ~= nil then
+        local name = v.station.backer_name .. "." .. tostring(signal)
 
-        -- Build list of stations and dispatchers
-        local stations = game.surfaces["nauvis"].find_entities_filtered{name= "train-stop"}
-        local dispatchers = game.surfaces["nauvis"].find_entities_filtered{name= "train-stop-dispatcher"}
-        for _, s in pairs(dispatchers) do
-          table.insert(stations, s)
-        end
-
-        -- Search for the destination station
-        for _, station in pairs(stations) do
-          if station.backer_name == v.station.backer_name .. "." .. tostring(signal) then
-            local current = v.schedule.current
-            local records = v.schedule.records
+        if global.stations[name] ~= nil  then
+          local current = v.schedule.current
+          local records = v.schedule.records
             
-            -- Insert the destination station to the train schedule
-            table.insert(records, current + 1, {station=station.backer_name, wait_conditions=records[current].wait_conditions })
-            v.train.schedule = {current=current + 1, records=records}
-            v.train.manual_mode = false
+          -- Insert the destination station to the train schedule
+          table.insert(records, current + 1, {station=name, wait_conditions=records[current].wait_conditions })
+          v.train.schedule = {current=current + 1, records=records}
+          v.train.manual_mode = false
 
-            -- This train is not awaiting dispatch any more
-            global.awaiting_dispatch[i] = nil
+          -- This train is not awaiting dispatch any more
+          global.awaiting_dispatch[i] = nil
 
-            -- If the train was sent to this dispatcher by another dispatcher, we need to update the train schedule and the dispatched variable
-            if global.dispatched[i] ~= nil then
-              reset_station(i)
-            end
-
-            -- Store the dispatched train
-            global.dispatched[i] = {train=v.train, station=station.backer_name, current=v.train.schedule.current}
+          -- If the train was sent to this dispatcher by another dispatcher, we need to update the train schedule and the dispatched variable
+          if global.dispatched[i] ~= nil then
+            reset_station(i)
           end
+
+          -- Store the dispatched train
+          global.dispatched[i] = {train=v.train, station=name, current=v.train.schedule.current}
         end
       end
     end
   end
+end
+script.on_event(defines.events.on_tick, tick)
 
-  -- Stop the ticker if there is no more awaiting dispatch trains
-  if next(global.awaiting_dispatch) == nil then
-    script.on_nth_tick(nil)
+
+-- Update list of stations (because players can change station names)
+function update_list_stations()
+  new_stations = {}
+  for name, station in pairs(global.stations) do
+    if not station.valid then
+      global.stations[name] = nil
+    else
+      if station.backer_name ~= name then
+        global.stations[name] = nil
+        new_stations[station.backer_name] = station
+      end
+    end
+  end
+  for name, station in pairs(new_stations) do
+    global.stations[name] = station
+  end
+end
+function build_list_stations()
+  global.stations = {}
+  local stations = game.surfaces["nauvis"].find_entities_filtered{name= "train-stop"}
+  for _, station in pairs(stations) do
+    global.stations[station.backer_name] = station
+  end
+  local dispatchers = game.surfaces["nauvis"].find_entities_filtered{name= "train-stop-dispatcher"}
+  for _, station in pairs(dispatchers) do
+    global.stations[station.backer_name] = station
   end
 end
 

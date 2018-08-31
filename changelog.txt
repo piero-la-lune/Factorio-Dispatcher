@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.0.1
+Date: 31. 08. 2018
+  Bugfixes:
+  	- Fix FPS drop when train waiting at dispatcher
+
+---------------------------------------------------------------------------------------------------
 Version: 1.0.0
 Date: 28. 08. 2018
-  Features: Initial version of the mod
+  Features:
+  	- Initial version of the mod
