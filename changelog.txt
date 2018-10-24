@@ -1,4 +1,12 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.0.2
+Date: 25. 10. 2018
+  Bugfixes:
+  	- Fix bug with disabled stations
+  	- Fix bug when coupling/uncoupling trains
+  	- Add debug mode (activated with command \disptacher-debug enabled)
+
+---------------------------------------------------------------------------------------------------
 Version: 1.0.1
 Date: 31. 08. 2018
   Bugfixes:
