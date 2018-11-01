@@ -24,8 +24,11 @@ script.on_configuration_changed(function(data)
     local old_version = data.mod_changes.Dispatcher.old_version
     local new_version = data.mod_changes.Dispatcher.new_version
 
-    if old_version < "1.0.2" then
-      global.debug = false
+    -- Mod version upgraded
+    if old_version then
+      if old_version < "1.0.2" then
+        global.debug = false
+      end
     end
 
     -- Build the list of stations on the map
