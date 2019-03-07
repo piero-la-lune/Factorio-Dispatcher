@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.1.1
+Date: 07. 03. 2019
+  Features:
+    - Add flying text to dispatcher when a train is dispatched
+    - Fix bug caused by temporary stations
+
+---------------------------------------------------------------------------------------------------
 Version: 1.1.0
 Date: 05. 03. 2019
   Features:

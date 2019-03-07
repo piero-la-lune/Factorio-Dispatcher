@@ -63,6 +63,8 @@ function train_changed_state(event)
       local schedule = global.awaiting_dispatch[id].schedule
       event.train.schedule = schedule
       debug("Train #", id, " set to manual mode while awaiting dispatch: schedule reseted")
+    else
+      debug("Train #", id, " schedule changed while awaiting dispatch: train not awaiting dispatch anymore but schedule not reseted")
     end
     global.awaiting_dispatch[id] = nil
   end
@@ -74,7 +76,7 @@ function train_changed_state(event)
   end
 
   -- When a train arrives at a dispatcher
-  if event.train.state == defines.train_state.wait_station and event.train.station.name == "train-stop-dispatcher" then
+  if event.train.state == defines.train_state.wait_station and event.train.station ~= nil and event.train.station.name == "train-stop-dispatcher" then
     -- Add the train to the global variable storing all the trains awaiting dispatch
     global.awaiting_dispatch[id] = {train=event.train, station=event.train.station, schedule=event.train.schedule}
     -- Change the train schedule so that the train stays at the station
@@ -190,6 +192,9 @@ function tick()
             -- Store the dispatched train
             global.dispatched[i] = {train=v.train, station=name, current=v.train.schedule.current}
 
+            for _, player in pairs(game.players) do
+              player.create_local_flying_text({text="Train dispatched to "..name, position=v.station.position, speed=1, time_to_live=200})
+            end
             debug("Train #", v.train.id, " has been dispatched to station '", name, "'")
           end
         end
