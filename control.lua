@@ -348,9 +348,9 @@ end
 function print_game(...)
   text = ""
   for _, v in ipairs{...} do
-    logger.log(v)
+    text = text .. logger.tostring(v)
   end
-  game.print("Log dump complete")
+  game.print(text)
 end
 
 -- Debug command
@@ -370,9 +370,8 @@ function cmd_debug(params)
     global.debug = true
     print_game("Debug mode enabled")
   elseif toogle == "dump" then
-    for v, data in pairs(global) do
-      print_game(v, ": ", data)
-    end
+    logger.log(global)
+	print_game("Log dump complete")
   end
 end
 commands.add_command("dispatcher-debug", {"command-help.dispatcher-debug"}, cmd_debug)
