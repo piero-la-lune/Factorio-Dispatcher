@@ -1,3 +1,6 @@
+
+local logger = require("__OpteraLib__.script.logger")
+
 SIGNAL_DISPATCH = {type="virtual", name="dispatcher-station"}
 
 -- Initiate global variables when activating the mod
@@ -345,14 +348,9 @@ end
 function print_game(...)
   text = ""
   for _, v in ipairs{...} do
-    if type(v) == "table" then
-      local serpent = require("serpent")
-      text = text..serpent.block(v)
-    else
-      text = text..tostring(v)
-    end
+    logger.log(v)
   end
-  game.print(text)
+  game.print("Log dump complete")
 end
 
 -- Debug command

@@ -4,7 +4,7 @@
   "title": "Dispatcher",
   "author": "piero-la-lune",
   "homepage": "",
-  "dependencies": ["base >= 0.17.0"],
+  "dependencies": ["base >= 0.17.0","OpteraLib >= 0.1.5"],
   "description": "Adds a new train station (Dispatcher) that dispatches waiting trains to a station when a dispatch virtual signal is received (target station ID is provided via the signal).",
   "factorio_version": "0.17"
 }
