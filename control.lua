@@ -62,9 +62,9 @@ function train_changed_state(event)
     if event.train.manual_mode then
       local schedule = global.awaiting_dispatch[id].schedule
       event.train.schedule = schedule
-      debug("Train #", id, " set to manual mode while awaiting dispatch: schedule reseted")
+      debug("Train #", id, " set to manual mode while awaiting dispatch: schedule reset")
     else
-      debug("Train #", id, " schedule changed while awaiting dispatch: train not awaiting dispatch anymore but schedule not reseted")
+      debug("Train #", id, " schedule changed while awaiting dispatch: train not awaiting dispatch anymore but schedule not reset")
     end
     global.awaiting_dispatch[id] = nil
   end
@@ -72,7 +72,7 @@ function train_changed_state(event)
   -- Ensure that dispatched train are going to the chosen destination
   if global.dispatched[id] ~= nil and global.dispatched[id].current ~= event.train.schedule.current then
     reset_station(id)
-    debug("Train #", id, " is no longer being dispatched: schedule reseted")
+    debug("Train #", id, " is no longer being dispatched: schedule reset")
   end
 
   -- When a train arrives at a dispatcher
@@ -120,7 +120,7 @@ function train_created(event)
       ad = global.awaiting_dispatch[event.old_train_id_1]
       event.train.schedule = ad.schedule
       event.train.manual_mode = false
-      debug("Train #", event.old_train_id_1, " was splitted to create train #", event.train.id, " while awaiting dispatch: train schedule reseted, and mode set to automatic")
+      debug("Train #", event.old_train_id_1, " was splitted to create train #", event.train.id, " while awaiting dispatch: train schedule reset, and mode set to automatic")
     end
     if global.dispatched[event.old_train_id_1] then
       d = global.dispatched[event.old_train_id_1]
@@ -146,7 +146,7 @@ function tick()
     elseif not v.station.valid then
       v.train.schedule = v.schedule
       global.awaiting_dispatch[i] = nil
-      debug("Train #", v.train.id, " is awaiting at a dispatcher that no longer exists: schedule reseted and train removed from awaiting dispatch list")
+      debug("Train #", v.train.id, " is awaiting at a dispatcher that no longer exists: schedule reset and train removed from awaiting dispatch list")
 
     else
 
