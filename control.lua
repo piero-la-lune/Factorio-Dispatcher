@@ -120,13 +120,13 @@ function train_created(event)
       ad = global.awaiting_dispatch[event.old_train_id_1]
       event.train.schedule = ad.schedule
       event.train.manual_mode = false
-      debug("Train #", event.old_train_id_1, " was splitted to create train #", event.train.id, " while awaiting dispatch: train schedule reset, and mode set to automatic")
+      debug("Train #", event.old_train_id_1, " was split to create train #", event.train.id, " while awaiting dispatch: train schedule reset, and mode set to automatic")
     end
     if global.dispatched[event.old_train_id_1] then
       d = global.dispatched[event.old_train_id_1]
       global.dispatched[event.train.id] = {train=event.train, station=d.station, current=d.current}
       event.train.manual_mode = false
-      debug("Train #", event.old_train_id_1, " was splitted to create train #", event.train.id, " while being dispatched: train schedule updated, and mode set to automatic")
+      debug("Train #", event.old_train_id_1, " was split to create train #", event.train.id, " while being dispatched: train schedule updated, and mode set to automatic")
     end
   end
 end
