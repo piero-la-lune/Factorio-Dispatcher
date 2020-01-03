@@ -40,18 +40,23 @@ end)
 
 -- Add new stations to global.stations
 function entity_built(event)
-  if event.created_entity.type == "train-stop" then
-    name = event.created_entity.backer_name
-    if not global.stations[name] then
-      global.stations[name] = {}
+  local entity = event.created_entity
+  if not entity then entity = event.entity end
+  if entity then
+    if entity.type == "train-stop" then
+      name = entity.backer_name
+      if not global.stations[name] then
+        global.stations[name] = {}
+      end
+      table.insert(global.stations[name], entity)
+      debug("New station: ", name)
     end
-    table.insert(global.stations[name], event.created_entity)
-    debug("New station: ", name)
   end
 end
 script.on_event(defines.events.on_built_entity, entity_built)
 script.on_event(defines.events.on_robot_built_entity, entity_built)
-
+script.on_event(defines.events.script_raised_built, entity_built)
+script.on_event(defines.events.script_raised_revive, entity_built)
 
 -- Track train state change
 function train_changed_state(event)
