@@ -1,6 +1,4 @@
 
-local logger = require("__OpteraLib__.script.logger")
-
 SIGNAL_DISPATCH = {type="virtual", name="dispatcher-station"}
 
 -- Initiate global variables when activating the mod
@@ -348,33 +346,56 @@ function debug(...)
     print_game(...)
   end
 end
+
 function print_game(...)
   text = ""
   for _, v in ipairs{...} do
-    text = text .. logger.tostring(v)
+    if type(v) == "table" then
+      text = text..serpent.block(v)
+    else
+      text = text..tostring(v)
+    end
   end
   game.print(text)
 end
+
+function print_file(...)
+  text = ""
+  for _, v in ipairs{...} do
+    if type(v) == "table" then
+      text = text..serpent.block(v)
+    else
+      text = text..tostring(v)
+    end
+  end
+  log(text)
+end  
 
 -- Debug command
 function cmd_debug(params)
   toogle = params.parameter
   if not toogle then
     if global.debug then
-      toogle = "disabled"
+      toogle = "disable"
     else
-      toogle = "enabled"
+      toogle = "enable"
     end
   end
-  if toogle == "disabled" then
+  if toogle == "disable" then
     global.debug = false
     print_game("Debug mode disabled")
-  elseif toogle == "enabled" then
+  elseif toogle == "enable" then
     global.debug = true
     print_game("Debug mode enabled")
   elseif toogle == "dump" then
-    logger.log(global)
-  print_game("Log dump complete")
+    for v, data in pairs(global) do
+      print_game(v, ": ", data)
+    end
+  elseif toogle == "dumplog" then
+    for v, data in pairs(global) do
+      print_file(v, ": ", data)
+    end
+    print_game("Dump written to log file")
   end
 end
 commands.add_command("dispatcher-debug", {"command-help.dispatcher-debug"}, cmd_debug)
