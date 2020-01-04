@@ -38,25 +38,97 @@ script.on_configuration_changed(function(data)
 end)
 
 
--- Add new stations to global.stations
-function entity_built(event)
-  local entity = event.created_entity
-  if not entity then entity = event.entity end
-  if entity then
-    if entity.type == "train-stop" then
-      name = entity.backer_name
-      if not global.stations[name] then
-        global.stations[name] = {}
+-- Add new station to global.stations if it meets our criteria
+function add_station(entity)
+  local name = entity.backer_name
+  local id = entity.unit_number
+  if entity.name == "train-stop-dispatcher" or name:match("%.[123456789]%d*$") then
+    if not global.stations[name] then
+      global.stations[name] = {}
+      global.stations[name][id] = entity
+      debug("Added first station named: ", name)
+    else
+      global.stations[name][id] = entity
+      debug("Added station: ", name)
+    end
+  else
+    debug("Ignoring new station: ", name)
+  end
+end
+
+-- Remove station from global.stations if it is in the list
+function remove_station(entity, old_name)
+  local name = old_name
+  if not name then name = entity.backer_name end
+  local id = entity.unit_number
+  if global.stations[name] then
+    if global.stations[name][id] then
+      global.stations[name][id] = nil
+      if table_size(global.stations[name]) == 0 then
+        global.stations[name] = nil
+        debug("Removed last station named: ", name)
+      else
+        debug("Removed station: ", name)
       end
-      table.insert(global.stations[name], entity)
-      debug("New station: ", name)
     end
   end
 end
-script.on_event(defines.events.on_built_entity, entity_built)
-script.on_event(defines.events.on_robot_built_entity, entity_built)
-script.on_event(defines.events.script_raised_built, entity_built)
-script.on_event(defines.events.script_raised_revive, entity_built)
+
+-- Add stations when built/revived
+function entity_built(event)
+  local entity = event.created_entity
+  if not entity then entity = event.entity end
+  if entity and entity.valid then
+    if entity.type == "train-stop" then
+      add_station(entity)
+    end
+  end
+end
+script.on_event({ defines.events.on_built_entity,
+                  defines.events.on_robot_built_entity,
+                  defines.events.script_raised_built,
+                  defines.events.script_raised_revive },
+                entity_built)
+
+-- Remove station when mined/destroyed
+function entity_removed(event)
+  local entity = event.entity
+  if entity and entity.valid then
+    if entity.type == "train-stop" then
+      remove_station(entity)
+    end
+  end
+end
+script.on_event({ defines.events.on_player_mined_entity,
+                  defines.events.on_robot_mined_entity,
+                  defines.events.on_entity_died,
+                  defines.events.script_raised_destroy },
+                entity_removed)
+
+-- Update station when renamed by player or script
+function entity_renamed(event)
+  local entity = event.entity
+  if entity and entity.valid then
+    if entity.type == "train-stop" then
+      remove_station(entity, event.old_name)
+      add_station(entity)
+    end
+  end
+end
+script.on_event(defines.events.on_entity_renamed, entity_renamed)
+
+
+-- Build list of stations
+function build_list_stations()
+  global.stations = {}
+  local stations = game.surfaces["nauvis"].find_entities_filtered{type= "train-stop"}
+  for _, station in pairs(stations) do
+    add_station(station)
+  end
+  debug("Stations list rebuilt")
+end
+
+
 
 -- Track train state change
 function train_changed_state(event)
@@ -225,62 +297,6 @@ function tick()
   end
 end
 script.on_event(defines.events.on_tick, tick)
-
-
--- Update list of stations (because players can change station names)
-function update_list_stations()
-  new_stations = {}
-  for name, stations in pairs(global.stations) do
-    for i, station in pairs(stations) do
-
-      -- Search for removed stations
-      if not station.valid then
-        global.stations[name][i] = nil
-        debug("Station '", name, "' no longer exists: removed from stations list")
-
-      -- Search for stations with new name
-      else
-        if station.backer_name ~= name then
-          global.stations[name][i] = nil
-          if not new_stations[station.backer_name] then
-            new_stations[station.backer_name] = {}
-          end
-          table.insert(new_stations[station.backer_name], station)
-          debug("Station '", name, "' has been renamed to '", station.backer_name, "': station list updated")
-        end
-      end
-
-    end
-    if #global.stations[name] == 0 then
-      global.stations[name] = nil
-    end
-  end
-
-  -- Update global.stations variable
-  for name, stations in pairs(new_stations) do
-    if not global.stations[name] then
-      global.stations[name] = {}
-    end
-    for _, station in pairs(stations) do
-      table.insert(global.stations[name], station)
-    end
-  end
-end
-script.on_nth_tick(300, update_list_stations)
-
-
--- Build list of stations
-function build_list_stations()
-  global.stations = {}
-  local stations = game.surfaces["nauvis"].find_entities_filtered{type= "train-stop"}
-  for _, station in pairs(stations) do
-    if not global.stations[station.backer_name] then
-      global.stations[station.backer_name] = {}
-    end
-    table.insert(global.stations[station.backer_name], station)
-  end
-  debug("Stations list rebuilt")
-end
 
 
 -- Reset train schedule after a train has reached its destination
