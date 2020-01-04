@@ -34,6 +34,8 @@ script.on_configuration_changed(function(data)
 
     -- Build the list of stations on the map
     build_list_stations()
+    -- Scrub train list for ones that don't exist anymore
+    scrub_trains()
   end
 end)
 
@@ -129,6 +131,21 @@ function build_list_stations()
 end
 
 
+-- Scrub list of trains
+function scrub_trains()
+  for id,ad in pairs(global.awaiting_dispatch) do
+    if not(ad.train and ad.train.valid) then
+      global.awaiting_dispatch[id] = nil
+      debug("Scrubbed train " .. id .. " from Awaiting Dispatch list.")
+    end
+  end
+  for id,d in pairs(global.dispatched) do
+    if not(d.train and d.train.valid) then
+      global.dispatched[id] = nil
+      debug("Scrubbed train " .. id .. " from Dispatched list.")
+    end
+  end
+end
 
 -- Track train state change
 function train_changed_state(event)
@@ -184,7 +201,9 @@ function train_created(event)
       else
         debug("Train #", event.old_train_id_1, " and #", event.old_train_id_2, " merged while awaiting dispatch: new train #", event.train.id, " set to manual because it has no schedule")
       end
-  end
+      global.awaiting_dispatch[event.old_train_id_2] = nil
+      global.awaiting_dispatch[event.old_train_id_1] = nil
+    end
     d = nil
     schedule = nil
     if global.dispatched[event.old_train_id_1] then
@@ -200,6 +219,8 @@ function train_created(event)
       else
         debug("Train #", event.old_train_id_1, " and #", event.old_train_id_2, " merged while being dispatched: new train #", event.train.id, " is no longer dispatched because it has no schedule")
       end
+      global.dispatched[event.old_train_id_1] = nil
+      global.dispatched[event.old_train_id_2] = nil
     end
   elseif event.old_train_id_1 then
     if global.awaiting_dispatch[event.old_train_id_1] then
@@ -208,6 +229,7 @@ function train_created(event)
       if count_locos(event.train) > 0 then
         event.train.manual_mode = false
         debug("Train #", event.old_train_id_1, " was split to create train #", event.train.id, " while awaiting dispatch: train schedule reset, and mode set to automatic")
+        global.dispatched[event.old_train_id_1] = nil
       else
         debug("Train #", event.old_train_id_1, " was split to create train #", event.train.id, " while awaiting dispatch: train schedule reset, and mode set to manual because it has no locomotives")
       end
@@ -218,6 +240,7 @@ function train_created(event)
         global.dispatched[event.train.id] = {train=event.train, station=d.station, current=d.current}
         event.train.manual_mode = false
         debug("Train #", event.old_train_id_1, " was split to create train #", event.train.id, " while being dispatched: train schedule reset, and mode set to automatic")
+        global.dispatched[event.old_train_id_1] = nil
       else
         debug("Train #", event.old_train_id_1, " was split to create train #", event.train.id, " while being dispatched: no longer dispatched, and mode set to manual because it has no locomotives")
       end
