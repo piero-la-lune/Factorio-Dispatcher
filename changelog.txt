@@ -1,4 +1,22 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.2.0
+Date: XX. XX. 2020
+  Features:
+    - Factorio 0.18 support.
+
+---------------------------------------------------------------------------------------------------
+Version: 1.1.2
+Date: XX. XX. 2020
+  Features:
+    - Added "/dispatcher-debug dumplog" command to write global station and train list to the log file.
+  Changes:
+    - Optimized station indexing using events to minimize CPU use when no train stops are being built/destroyed/renamed.
+  Bugfixes:
+    - Fixed that uncoupled wagons were set to automatic mode even though they had no locomotive, which prevented unloading.
+    - Fixed "/dispatcher-debug dump" command crash.
+    - Fixed crash when dispatched train has no schedule.
+
+---------------------------------------------------------------------------------------------------
 Version: 1.1.1
 Date: 07. 03. 2019
   Features:

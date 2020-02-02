@@ -1,6 +1,5 @@
 
 local SIGNAL_DISPATCH = {type="virtual", name="dispatcher-station"}
---local SIGNAL_DISPATCH = {type="item", name="iron-plate"}
 
 -- Initiate global variables when activating the mod
 script.on_init(function()
@@ -35,7 +34,7 @@ script.on_configuration_changed(function(data)
 
     -- Build the list of stations on the map
     build_list_stations()
-    -- Scrub train list for ones that don't exist anymore
+    -- Scrub train list to remove ones that don't exist anymore
     scrub_trains()
   end
 end)
@@ -227,7 +226,7 @@ function train_created(event)
     if global.awaiting_dispatch[event.old_train_id_1] then
       ad = global.awaiting_dispatch[event.old_train_id_1]
       event.train.schedule = ad.schedule
-      if count_locos(event.train) > 0 then
+      if has_locos(event.train) then
         event.train.manual_mode = false
         debug("Train #", event.old_train_id_1, " was split to create train #", event.train.id, " while awaiting dispatch: train schedule reset, and mode set to automatic")
         global.dispatched[event.old_train_id_1] = nil
@@ -236,7 +235,7 @@ function train_created(event)
       end
     end
     if global.dispatched[event.old_train_id_1] then
-      if count_locos(event.train) > 0 then
+      if has_locos(event.train) then
         d = global.dispatched[event.old_train_id_1]
         global.dispatched[event.train.id] = {train=event.train, station=d.station, current=d.current}
         event.train.manual_mode = false
@@ -270,8 +269,7 @@ function tick()
 
       -- Get the dispatch signal at the dispatcher
       local signal = v.station.get_merged_signal(SIGNAL_DISPATCH)
-      debug("Signal is "..tostring(signal))
-
+      
       if signal ~= nil then
         local name = v.station.backer_name .. "." .. tostring(signal)
 
@@ -294,7 +292,7 @@ function tick()
           if found then
             local current = v.schedule.current
             local records = v.schedule.records
-              
+
             -- Insert the destination station to the train schedule
             table.insert(records, current + 1, {station=name, wait_conditions=records[current].wait_conditions })
             v.train.schedule = {current=current + 1, records=records}
@@ -316,7 +314,7 @@ function tick()
             end
             debug("Train #", v.train.id, " has been dispatched to station '", name, "'")
           else
-            debug("Train #", v.train.id, " can't find any enabled station '", name, "'")
+            --debug("Train #", v.train.id, " can't find any enabled station '", name, "'")
           end
         else
           --debug("Train #", v.train.id, " can't find any station named '", name, "'")
@@ -334,7 +332,7 @@ function reset_station(id)
   if global.dispatched[id].train.schedule then
     local records = global.dispatched[id].train.schedule.records
     local current = global.dispatched[id].train.schedule.current
-    
+
     -- Only reset the train schedule if it has reached the correct station
     if records[global.dispatched[id].current] ~= nil and records[global.dispatched[id].current].station == global.dispatched[id].station then
 
@@ -348,28 +346,44 @@ function reset_station(id)
 
       -- Reset train schedule
       global.dispatched[id].train.schedule = {current=current, records=records}
-      if count_locos(global.dispatched[id].train) > 0 then
+      if has_locos(global.dispatched[id].train) then
         global.dispatched[id].train.manual_mode = false
       else
         global.dispatched[id].train.manual_mode = true
       end
     end
   end
-  
+
   global.dispatched[id] = nil
 end
 
--- Count the number of locomotives in the train
-function count_locos(train)
-  for _,loco in pairs(train.locomotives.front_movers) do
-    return 2000
+-- Check for any locomotives in the train
+function has_locos(train)
+  if next(train.locomotives.front_movers) then
+    return true
   end
-  for _,loco in pairs(train.locomotives.back_movers) do
-    return 3000
+  if next(train.locomotives.back_movers) then
+    return true
   end
-  return 0
+  return false
 end
 
+
+function any_to_string(...)
+  local text = ""
+  for _, v in ipairs{...} do
+    if type(v) == "table" then
+      text = text..serpent.block(v)
+    else
+      text = text..tostring(v)
+    end
+  end
+  return text
+end
+
+function print_game(...)
+  game.print(any_to_string(...))
+end
 
 -- Debug (print text to player console)
 function debug(...)
@@ -378,53 +392,29 @@ function debug(...)
   end
 end
 
-function print_game(...)
-  text = ""
-  for _, v in ipairs{...} do
-    if type(v) == "table" then
-      text = text..serpent.block(v)
-    else
-      text = text..tostring(v)
-    end
-  end
-  game.print(text)
-end
-
-function print_file(...)
-  text = ""
-  for _, v in ipairs{...} do
-    if type(v) == "table" then
-      text = text..serpent.block(v)
-    else
-      text = text..tostring(v)
-    end
-  end
-  log(text)
-end  
-
 -- Debug command
 function cmd_debug(params)
-  toogle = params.parameter
-  if not toogle then
+  local toggle = params.parameter
+  if not toggle then
     if global.debug then
-      toogle = "disable"
+      toggle = "disable"
     else
-      toogle = "enable"
+      toggle = "enable"
     end
   end
-  if toogle == "disable" then
+  if toggle == "disable" then
     global.debug = false
     print_game("Debug mode disabled")
-  elseif toogle == "enable" then
+  elseif toggle == "enable" then
     global.debug = true
     print_game("Debug mode enabled")
-  elseif toogle == "dump" then
+  elseif toggle == "dump" then
     for v, data in pairs(global) do
       print_game(v, ": ", data)
     end
-  elseif toogle == "dumplog" then
+  elseif toggle == "dumplog" then
     for v, data in pairs(global) do
-      print_file(v, ": ", data)
+      log(any_to_string(v, ": ", data))
     end
     print_game("Dump written to log file")
   end
