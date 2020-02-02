@@ -1,38 +1,44 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.1.2
+Date: XX. XX. 2020
+  Features:
+    - Added "/dispatcher-debug dumplog" command to write global station and train list to the log file.
+  Changes:
+    - Optimized station indexing using events to minimize CPU use when no train stops are being built/destroyed/renamed.
+  Bugfixes:
+    - Fixed that uncoupled wagons were set to automatic mode even though they had no locomotive, which prevented unloading.
+    - Fixed "/dispatcher-debug dump" command crash.
+    - Fixed crash when dispatched train has no schedule.
+---------------------------------------------------------------------------------------------------
 Version: 1.1.1
 Date: 07. 03. 2019
   Features:
     - Add flying text to dispatcher when a train is dispatched
     - Fix bug caused by temporary stations
-
 ---------------------------------------------------------------------------------------------------
 Version: 1.1.0
 Date: 05. 03. 2019
   Features:
     - Add support for Factorio 0.17.x
-
 ---------------------------------------------------------------------------------------------------
 Version: 1.0.3
 Date: 27. 10. 2018
   Bugfixes:
-  	- Fix bug that crashes the game when the mod is first installed
-
+    - Fix bug that crashes the game when the mod is first installed
 ---------------------------------------------------------------------------------------------------
 Version: 1.0.2
 Date: 25. 10. 2018
   Bugfixes:
-  	- Fix bug with disabled stations
-  	- Fix bug when coupling/uncoupling trains
-  	- Add debug mode (activated with command \disptacher-debug enabled)
-
+    - Fix bug with disabled stations
+    - Fix bug when coupling/uncoupling trains
+    - Add debug mode (activated with command \disptacher-debug enabled)
 ---------------------------------------------------------------------------------------------------
 Version: 1.0.1
 Date: 31. 08. 2018
   Bugfixes:
-  	- Fix FPS drop when train waiting at dispatcher
-
+    - Fix FPS drop when train waiting at dispatcher
 ---------------------------------------------------------------------------------------------------
 Version: 1.0.0
 Date: 28. 08. 2018
   Features:
-  	- Initial version of the mod
+    - Initial version of the mod
