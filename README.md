@@ -17,6 +17,7 @@ All contributions are welcomed!
 Contributors:
 
 * **piero-la-lune** - *Mod author*
+* **robot256** - *Contributor*
 
 ## License
 

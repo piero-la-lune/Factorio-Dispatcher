@@ -1,6 +1,6 @@
 ---------------------------------------------------------------------------------------------------
 Version: 1.1.2
-Date: XX. XX. 2020
+Date: 02. 02. 2020
   Features:
     - Added "/dispatcher-debug dumplog" command to write global station and train list to the log file.
   Changes:
