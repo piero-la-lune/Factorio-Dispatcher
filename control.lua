@@ -1,5 +1,6 @@
 
-SIGNAL_DISPATCH = {type="virtual", name="dispatcher-station"}
+local SIGNAL_DISPATCH = {type="virtual", name="dispatcher-station"}
+--local SIGNAL_DISPATCH = {type="item", name="iron-plate"}
 
 -- Initiate global variables when activating the mod
 script.on_init(function()
@@ -268,7 +269,8 @@ function tick()
     else
 
       -- Get the dispatch signal at the dispatcher
-      local signal = get_signal(v.station, SIGNAL_DISPATCH)
+      local signal = v.station.get_merged_signal(SIGNAL_DISPATCH)
+      debug("Signal is "..tostring(signal))
 
       if signal ~= nil then
         local name = v.station.backer_name .. "." .. tostring(signal)
@@ -313,7 +315,11 @@ function tick()
               player.create_local_flying_text({text="Train dispatched to "..name, position=v.station.position, speed=1, time_to_live=200})
             end
             debug("Train #", v.train.id, " has been dispatched to station '", name, "'")
+          else
+            debug("Train #", v.train.id, " can't find any enabled station '", name, "'")
           end
+        else
+          --debug("Train #", v.train.id, " can't find any station named '", name, "'")
         end
       end
     end
@@ -351,25 +357,6 @@ function reset_station(id)
   end
   
   global.dispatched[id] = nil
-end
-
-
--- Get red and green signal for given entity and signal
-function get_signal(entity, signal)
-  local red = entity.get_circuit_network(defines.wire_type.red)
-  local green = entity.get_circuit_network(defines.wire_type.green)
-  local value = nil
-  if red then
-    value = red.get_signal(signal)
-  end
-  if green then
-    if value == nil then
-      value = green.get_signal(signal)
-    else
-      value = value + green.get_signal(signal)
-    end
-  end
-  return value
 end
 
 -- Count the number of locomotives in the train
