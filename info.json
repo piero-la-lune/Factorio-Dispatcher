@@ -1,10 +1,10 @@
 {
   "name": "Dispatcher",
-  "version": "1.1.201",
+  "version": "1.1.12",
   "title": "Dispatcher",
   "author": "piero-la-lune",
   "homepage": "",
-  "dependencies": ["base >= 0.18.0"],
+  "dependencies": ["base >= 0.17.0"],
   "description": "Adds a new train station (Dispatcher) that dispatches waiting trains to a station when a dispatch virtual signal is received (target station ID is provided via the signal).",
-  "factorio_version": "0.18"
+  "factorio_version": "0.17"
 }
