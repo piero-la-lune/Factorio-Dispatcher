@@ -69,7 +69,7 @@ function remove_station(entity, old_name)
   local surface_index = entity.surface.index
   if global.stations[surface_index] and global.stations[surface_index][name] and global.stations[surface_index][name][id] then
     global.stations[surface_index][name][id] = nil
-    if not next(global.stations[surface_index][name]) == 0 then
+    if not next(global.stations[surface_index][name]) then
       global.stations[surface_index][name] = nil
       debug("Removed last station named: ", game.surfaces[surface_index].name.."/"..name)
       if not next(global.stations[surface_index]) then
