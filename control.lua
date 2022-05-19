@@ -52,31 +52,32 @@ function add_station(entity)
     if not global.stations[surface_index][name] then
       global.stations[surface_index][name] = {}
       global.stations[surface_index][name][id] = entity
-      debug("Added first station: ", surface_index.."/"..name)
+      debug("Added first station: ", game.surfaces[surface_index].name.."/"..name)
     else
       global.stations[surface_index][name][id] = entity
-      debug("Added station: ", surface_index.."/"..name)
+      debug("Added station: ", game.surfaces[surface_index].name.."/"..name)
     end
   else
-    debug("Ignoring new station: ", surface_index.."/"..name)
+    debug("Ignoring new station: ", game.surfaces[surface_index].name.."/"..name)
   end
 end
 
 -- Remove station from global.stations if it is in the list
 function remove_station(entity, old_name)
-  local name = old_name
-  local surface_index = entity.surface.index
-  if not name then name = entity.backer_name end
+  local name = old_name or entity.backer_name
   local id = entity.unit_number
-  if global.stations[surface_index] and global.stations[surface_index][name] then
-    if global.stations[surface_index][name][id] then
-      global.stations[surface_index][name][id] = nil
-      if table_size(global.stations[surface_index][name]) == 0 then
-        global.stations[surface_index][name] = nil
-        debug("Removed last station named: ", surface_index.."/"..name)
-      else
-        debug("Removed station: ", surface_index.."/"..name)
+  local surface_index = entity.surface.index
+  if global.stations[surface_index] and global.stations[surface_index][name] and global.stations[surface_index][name][id] then
+    global.stations[surface_index][name][id] = nil
+    if not next(global.stations[surface_index][name]) == 0 then
+      global.stations[surface_index][name] = nil
+      debug("Removed last station named: ", game.surfaces[surface_index].name.."/"..name)
+      if not next(global.stations[surface_index]) then
+        global.stations[surface_index] = nil
+        debug("Removed last station from surface "..game.surfaces[surface_index].name)
       end
+    else
+      debug("Removed station: ", game.surfaces[surface_index].name.."/"..name)
     end
   end
 end
@@ -267,11 +268,11 @@ function tick()
       -- Get the dispatch signal at the dispatcher
       local signal = v.station.get_merged_signal(SIGNAL_DISPATCH)
       
-      if signal ~= nil then
+      if signal then
         local name = v.station.backer_name .. "." .. tostring(signal)
         local surface_index = v.station.surface.index
 
-        if global.stations[surface_index] and global.stations[surface_index][name] ~= nil then
+        if global.stations[surface_index] and global.stations[surface_index][name] then
 
           -- Search for valid destination station
           found = false
