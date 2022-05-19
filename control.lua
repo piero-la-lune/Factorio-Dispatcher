@@ -44,38 +44,38 @@ end)
 function add_station(entity)
   local name = entity.backer_name
   local id = entity.unit_number
-  local surface_name = entity.surface.name
+  local surface_index = entity.surface.index
   if entity.name == "train-stop-dispatcher" or name:match("%.[123456789]%d*$") then
-    if not global.stations[surface_name] then
-      global.stations[surface_name] = {}
+    if not global.stations[surface_index] then
+      global.stations[surface_index] = {}
     end
-    if not global.stations[surface_name][name] then
-      global.stations[surface_name][name] = {}
-      global.stations[surface_name][name][id] = entity
-      debug("Added first station: ", surface_name.."/"..name)
+    if not global.stations[surface_index][name] then
+      global.stations[surface_index][name] = {}
+      global.stations[surface_index][name][id] = entity
+      debug("Added first station: ", surface_index.."/"..name)
     else
-      global.stations[surface_name][name][id] = entity
-      debug("Added station: ", surface_name.."/"..name)
+      global.stations[surface_index][name][id] = entity
+      debug("Added station: ", surface_index.."/"..name)
     end
   else
-    debug("Ignoring new station: ", surface_name.."/"..name)
+    debug("Ignoring new station: ", surface_index.."/"..name)
   end
 end
 
 -- Remove station from global.stations if it is in the list
 function remove_station(entity, old_name)
   local name = old_name
-  local surface_name = entity.surface.name
+  local surface_index = entity.surface.index
   if not name then name = entity.backer_name end
   local id = entity.unit_number
-  if global.stations[surface_name] and global.stations[surface_name][name] then
-    if global.stations[surface_name][name][id] then
-      global.stations[surface_name][name][id] = nil
-      if table_size(global.stations[surface_name][name]) == 0 then
-        global.stations[surface_name][name] = nil
-        debug("Removed last station named: ", surface_name.."/"..name)
+  if global.stations[surface_index] and global.stations[surface_index][name] then
+    if global.stations[surface_index][name][id] then
+      global.stations[surface_index][name][id] = nil
+      if table_size(global.stations[surface_index][name]) == 0 then
+        global.stations[surface_index][name] = nil
+        debug("Removed last station named: ", surface_index.."/"..name)
       else
-        debug("Removed station: ", surface_name.."/"..name)
+        debug("Removed station: ", surface_index.."/"..name)
       end
     end
   end
@@ -269,13 +269,13 @@ function tick()
       
       if signal ~= nil then
         local name = v.station.backer_name .. "." .. tostring(signal)
-        local surface_name = v.station.surface.name
+        local surface_index = v.station.surface.index
 
-        if global.stations[surface_name] and global.stations[surface_name][name] ~= nil then
+        if global.stations[surface_index] and global.stations[surface_index][name] ~= nil then
 
           -- Search for valid destination station
           found = false
-          for _,station in pairs(global.stations[surface_name][name]) do
+          for _,station in pairs(global.stations[surface_index][name]) do
             -- Check that the station exists
             if station.valid then
               local cb = station.get_control_behavior()
