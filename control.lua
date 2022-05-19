@@ -83,8 +83,7 @@ end
 
 -- Add stations when built/revived
 function entity_built(event)
-  local entity = event.created_entity
-  if not entity then entity = event.entity end
+  local entity = event.created_entity or event.entity or event.destination
   if entity and entity.valid then
     if entity.type == "train-stop" then
       add_station(entity)
@@ -94,7 +93,8 @@ end
 script.on_event({ defines.events.on_built_entity,
                   defines.events.on_robot_built_entity,
                   defines.events.script_raised_built,
-                  defines.events.script_raised_revive },
+                  defines.events.script_raised_revive,
+                  defines.events.on_entity_cloned},
                 entity_built)
 
 -- Remove station when mined/destroyed
