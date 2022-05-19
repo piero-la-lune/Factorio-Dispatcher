@@ -11,8 +11,8 @@ script.on_init(function()
   -- (we need to keep track of this in order to be able to reset the train schedule when it arrives at its destination)
   global.dispatched = {}
 
-  -- Store all the stations
-  -- (we need it for performance reasons)
+  -- Store all the stations per surface
+  -- (we need it cached for performance reasons)
   global.stations = {}
 
   global.debug = false
@@ -44,33 +44,38 @@ end)
 function add_station(entity)
   local name = entity.backer_name
   local id = entity.unit_number
+  local surface_name = entity.surface.name
   if entity.name == "train-stop-dispatcher" or name:match("%.[123456789]%d*$") then
-    if not global.stations[name] then
-      global.stations[name] = {}
-      global.stations[name][id] = entity
-      debug("Added first station named: ", name)
+    if not global.stations[surface_name] then
+      global.stations[surface_name] = {}
+    end
+    if not global.stations[surface_name][name] then
+      global.stations[surface_name][name] = {}
+      global.stations[surface_name][name][id] = entity
+      debug("Added first station: ", surface_name.."/"..name)
     else
-      global.stations[name][id] = entity
-      debug("Added station: ", name)
+      global.stations[surface_name][name][id] = entity
+      debug("Added station: ", surface_name.."/"..name)
     end
   else
-    debug("Ignoring new station: ", name)
+    debug("Ignoring new station: ", surface_name.."/"..name)
   end
 end
 
 -- Remove station from global.stations if it is in the list
 function remove_station(entity, old_name)
   local name = old_name
+  local surface_name = entity.surface.name
   if not name then name = entity.backer_name end
   local id = entity.unit_number
-  if global.stations[name] then
-    if global.stations[name][id] then
-      global.stations[name][id] = nil
-      if table_size(global.stations[name]) == 0 then
-        global.stations[name] = nil
-        debug("Removed last station named: ", name)
+  if global.stations[surface_name] and global.stations[surface_name][name] then
+    if global.stations[surface_name][name][id] then
+      global.stations[surface_name][name][id] = nil
+      if table_size(global.stations[surface_name][name]) == 0 then
+        global.stations[surface_name][name] = nil
+        debug("Removed last station named: ", surface_name.."/"..name)
       else
-        debug("Removed station: ", name)
+        debug("Removed station: ", surface_name.."/"..name)
       end
     end
   end
@@ -123,9 +128,11 @@ script.on_event(defines.events.on_entity_renamed, entity_renamed)
 -- Build list of stations
 function build_list_stations()
   global.stations = {}
-  local stations = game.surfaces["nauvis"].find_entities_filtered{type= "train-stop"}
-  for _, station in pairs(stations) do
-    add_station(station)
+  for _,surface in pairs(game.surfaces) do
+    local stations = surface.get_train_stops()
+    for _,station in pairs(stations) do
+      add_station(station)
+    end
   end
   debug("Stations list rebuilt")
 end
@@ -272,12 +279,13 @@ function tick()
       
       if signal ~= nil then
         local name = v.station.backer_name .. "." .. tostring(signal)
+        local surface_name = v.station.surface.name
 
-        if global.stations[name] ~= nil then
+        if global.stations[surface_name] and global.stations[surface_name][name] ~= nil then
 
           -- Search for valid destination station
           found = false
-          for _, station in pairs(global.stations[name]) do
+          for _,station in pairs(global.stations[surface_name][name]) do
             -- Check that the station exists
             if station.valid then
               local cb = station.get_control_behavior()
