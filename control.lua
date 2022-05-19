@@ -81,45 +81,35 @@ function remove_station(entity, old_name)
   end
 end
 
+-- Filter definition to get train stop events
+local filter = {{filter="type", type="train-stop"}}
+
 -- Add stations when built/revived
 function entity_built(event)
   local entity = event.created_entity or event.entity or event.destination
-  if entity and entity.valid then
-    if entity.type == "train-stop" then
-      add_station(entity)
-    end
-  end
+  add_station(entity)
 end
-script.on_event({ defines.events.on_built_entity,
-                  defines.events.on_robot_built_entity,
-                  defines.events.script_raised_built,
-                  defines.events.script_raised_revive,
-                  defines.events.on_entity_cloned},
-                entity_built)
+script.on_event(defines.events.on_built_entity, entity_built, filter)
+script.on_event(defines.events.on_robot_built_entity, entity_built, filter)
+script.on_event(defines.events.script_raised_built, entity_built, filter)
+script.on_event(defines.events.script_raised_revive, entity_built, filter)
+script.on_event(defines.events.on_entity_cloned, entity_built, filter)
 
 -- Remove station when mined/destroyed
 function entity_removed(event)
-  local entity = event.entity
-  if entity and entity.valid then
-    if entity.type == "train-stop" then
-      remove_station(entity)
-    end
-  end
+  remove_station(event.entity)
 end
-script.on_event({ defines.events.on_player_mined_entity,
-                  defines.events.on_robot_mined_entity,
-                  defines.events.on_entity_died,
-                  defines.events.script_raised_destroy },
-                entity_removed)
+script.on_event(defines.events.on_player_mined_entity, entity_removed, filter)
+script.on_event(defines.events.on_robot_mined_entity, entity_removed, filter)
+script.on_event(defines.events.on_entity_died, entity_removed, filter)
+script.on_event(defines.events.script_raised_destroy, entity_removed, filter)
 
 -- Update station when renamed by player or script
 function entity_renamed(event)
   local entity = event.entity
-  if entity and entity.valid then
-    if entity.type == "train-stop" then
-      remove_station(entity, event.old_name)
-      add_station(entity)
-    end
+  if entity.type == "train-stop" then
+    remove_station(entity, event.old_name)
+    add_station(entity)
   end
 end
 script.on_event(defines.events.on_entity_renamed, entity_renamed)
