@@ -419,3 +419,5 @@ function cmd_debug(params)
   end
 end
 commands.add_command("dispatcher-debug", {"command-help.dispatcher-debug"}, cmd_debug)
+
+if script.active_mods["gvv"] then require("__gvv__.gvv")() end
