@@ -1,3 +1,4 @@
+require("util")
 
 local SIGNAL_DISPATCH = {type="virtual", name="dispatcher-station"}
 
@@ -82,28 +83,41 @@ function remove_station(entity, old_name)
   end
 end
 
--- Filter definition to get train stop events
-local filter = {{filter="type", type="train-stop"}}
-
 -- Add stations when built/revived
 function entity_built(event)
-  local entity = event.created_entity or event.entity or event.destination
+  local entity = event.created_entity or event.entity
   add_station(entity)
 end
-script.on_event(defines.events.on_built_entity, entity_built, filter)
-script.on_event(defines.events.on_robot_built_entity, entity_built, filter)
-script.on_event(defines.events.script_raised_built, entity_built, filter)
-script.on_event(defines.events.script_raised_revive, entity_built, filter)
-script.on_event(defines.events.on_entity_cloned, entity_built, filter)
+script.on_event(defines.events.on_built_entity, entity_built, {{filter="type", type="train-stop"}})
+script.on_event(defines.events.on_robot_built_entity, entity_built, {{filter="type", type="train-stop"}})
+script.on_event(defines.events.script_raised_built, entity_built, {{filter="type", type="train-stop"}})
+script.on_event(defines.events.script_raised_revive, entity_built, {{filter="type", type="train-stop"}})
+
+-- Add station or copy train data when cloned
+function entity_cloned(event)
+  local entity = event.destination
+  if entity.type == "train-stop" then
+    add_station(entity)
+  elseif entity.type == "locomotive" and event.source then
+    local previous_id = event.source.train.id
+    if global.awaiting_dispatch[previous_id] then
+      -- Copy saved schedule from source to the cloned train, because it starts in manual mode
+      local new_train = entity.train
+      debug("Cloning saving schedule from train "..tostring(previous_id).." to train "..tostring(new_train.id)..": "..serpent.line(global.awaiting_dispatch[previous_id].schedule))
+      new_train.schedule = global.awaiting_dispatch[previous_id].schedule
+    end
+  end
+end
+script.on_event(defines.events.on_entity_cloned, entity_cloned, {{filter="type", type="train-stop"}, {filter="type", type="locomotive"}})
 
 -- Remove station when mined/destroyed
 function entity_removed(event)
   remove_station(event.entity)
 end
-script.on_event(defines.events.on_player_mined_entity, entity_removed, filter)
-script.on_event(defines.events.on_robot_mined_entity, entity_removed, filter)
-script.on_event(defines.events.on_entity_died, entity_removed, filter)
-script.on_event(defines.events.script_raised_destroy, entity_removed, filter)
+script.on_event(defines.events.on_player_mined_entity, entity_removed, {{filter="type", type="train-stop"}})
+script.on_event(defines.events.on_robot_mined_entity, entity_removed, {{filter="type", type="train-stop"}})
+script.on_event(defines.events.on_entity_died, entity_removed, {{filter="type", type="train-stop"}})
+script.on_event(defines.events.script_raised_destroy, entity_removed, {{filter="type", type="train-stop"}})
 
 -- Update station when renamed by player or script
 function entity_renamed(event)
@@ -147,34 +161,38 @@ end
 
 -- Track train state change
 function train_changed_state(event)
-  local id = event.train.id
-
+  local train = event.train
+  local id = train.id
+  
   -- A train that is awaiting dispatch cannot change state
-  if global.awaiting_dispatch[id] ~= nil then
+  if global.awaiting_dispatch[id] then
     -- If the train mode has been set to manual mode, then we need to reset the train schedule
-    if event.train.manual_mode then
+    if train.manual_mode then
       local schedule = global.awaiting_dispatch[id].schedule
-      event.train.schedule = schedule
+      train.schedule = schedule
       debug("Train #", id, " set to manual mode while awaiting dispatch: schedule reset")
     else
       debug("Train #", id, " schedule changed while awaiting dispatch: train not awaiting dispatch anymore but schedule not reset")
     end
     global.awaiting_dispatch[id] = nil
   end
+  
+  local train_schedule = train.schedule
 
   -- Ensure that dispatched train are going to the chosen destination
-  if global.dispatched[id] ~= nil and (event.train.schedule == nil or global.dispatched[id].current ~= event.train.schedule.current) then
+  if global.dispatched[id] and (not train_schedule or global.dispatched[id].current ~= train_schedule.current) then
     reset_station(id)
     debug("Train #", id, " is no longer being dispatched: schedule reset")
   end
 
   -- When a train arrives at a dispatcher
-  if event.train.state == defines.train_state.wait_station and event.train.station ~= nil and event.train.station.name == "train-stop-dispatcher" then
+  local train_station = train.station
+  if train.state == defines.train_state.wait_station and train_station and train_station.name == "train-stop-dispatcher" then
     -- Add the train to the global variable storing all the trains awaiting dispatch
-    global.awaiting_dispatch[id] = {train=event.train, station=event.train.station, schedule=event.train.schedule}
+    global.awaiting_dispatch[id] = {train=train, station=train_station, schedule=train_schedule}
     -- Change the train schedule so that the train stays at the station
-    event.train.schedule = {current=1, records={{station=event.train.station.backer_name, wait_conditions={{type="circuit", compare_type="or", condition={}}}}}}
-    debug("Train #", id, " has arrived to dispatcher '", event.train.station.backer_name, "': awaiting dispatch")
+    train.schedule = {current=1, records={{station=train_station.backer_name, wait_conditions={{type="circuit", compare_type="or", condition={}}}}}}
+    debug("Train #", id, " has arrived to dispatcher '", train_station.backer_name, "': awaiting dispatch")
   end
 end
 script.on_event(defines.events.on_train_changed_state, train_changed_state)
