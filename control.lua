@@ -311,7 +311,7 @@ function tick()
             local records = v.schedule.records
 
             -- Insert the destination station to the train schedule
-            table.insert(records, current + 1, {station=name, wait_conditions=records[current].wait_conditions })
+            table.insert(records, current + 1, {station=name, wait_conditions=records[current].wait_conditions, temporary=true })
             v.train.schedule = {current=current + 1, records=records}
             v.train.manual_mode = false
 
@@ -319,12 +319,12 @@ function tick()
             global.awaiting_dispatch[i] = nil
 
             -- If the train was sent to this dispatcher by another dispatcher, we need to update the train schedule and the dispatched variable
-            if global.dispatched[i] ~= nil then
-              reset_station(i)
-            end
+            --if global.dispatched[i] then
+            --  reset_station(i)
+            --end
 
             -- Store the dispatched train
-            global.dispatched[i] = {train=v.train, station=name, current=v.train.schedule.current}
+            --global.dispatched[i] = {train=v.train, station=name, current=v.train.schedule.current}
 
             for _, player in pairs(game.players) do
               player.create_local_flying_text({text="Train dispatched to "..name, position=v.station.position, speed=1, time_to_live=200})
@@ -347,11 +347,12 @@ script.on_event(defines.events.on_tick, tick)
 function reset_station(id)
   -- If new train has no schedule, do not give it one and remove it from dispatching list.
   if global.dispatched[id].train.schedule then
-    local records = global.dispatched[id].train.schedule.records
-    local current = global.dispatched[id].train.schedule.current
+    local schedule = global.dispatched[id].train.schedule
+    local records = schedule.records
+    local current = schedule.current
 
     -- Only reset the train schedule if it has reached the correct station
-    if records[global.dispatched[id].current] ~= nil and records[global.dispatched[id].current].station == global.dispatched[id].station then
+    if records[global.dispatched[id].current] and records[global.dispatched[id].current].station == global.dispatched[id].station and not records[global.dispatched[id].current].temporary then
 
       -- Remove destination station from schedule
       table.remove(records, global.dispatched[id].current)
@@ -362,6 +363,7 @@ function reset_station(id)
       end
 
       -- Reset train schedule
+      debug("Resetting train schedule for ID "..tostring(id))
       global.dispatched[id].train.schedule = {current=current, records=records}
       if has_locos(global.dispatched[id].train) then
         global.dispatched[id].train.manual_mode = false
