@@ -1,16 +1,14 @@
 require("util")
 
+local NAME_DISPATCHER_ENTITY = "train-stop-dispatcher"
 local SIGNAL_DISPATCH = {type="virtual", name="dispatcher-station"}
+local NAME_SEPARATOR_REGEX = "%."
 
 -- Initiate global variables when activating the mod
 script.on_init(function()
   -- Store all the train awaiting dispatch
   -- (we need to keep track of these trains in order to dispatch a train when a dispatch signal is sent)
   global.awaiting_dispatch = {}
-
-  -- Store all the train that have been dispatched
-  -- (we need to keep track of this in order to be able to reset the train schedule when it arrives at its destination)
-  --global.dispatched = {}
 
   -- Store all the stations per surface
   -- (we need it cached for performance reasons)
@@ -32,13 +30,15 @@ script.on_configuration_changed(function(data)
         global.debug = false
       end
     end
+    -- TODO: remove this
     global.debug = true
-    
+
     -- Build the list of stations on the map
     build_list_stations()
     -- Scrub train list to remove ones that don't exist anymore
     scrub_trains()
-    
+
+    -- Complete the migration if no dispatched trains remain in list
     if global.dispatched then
       if next(global.dispatched) then
         debug("Dispatcher: Warning! Could not migrate all dispatched trains. Please upload save file to the Dispatcher mod page.")
@@ -56,7 +56,7 @@ function add_station(entity)
   local name = entity.backer_name
   local id = entity.unit_number
   local surface_index = entity.surface.index
-  if entity.name == "train-stop-dispatcher" or name:match("%.[123456789]%d*$") then
+  if entity.name == NAME_DISPATCHER_ENTITY or name:match(NAME_SEPARATOR_REGEX.."[123456789]%d*$") then
     if not global.stations[surface_index] then
       global.stations[surface_index] = {}
     end
@@ -69,7 +69,7 @@ function add_station(entity)
       debug("Added station: ", game.surfaces[surface_index].name.."/"..name)
     end
   else
-    debug("Ignoring new station: ", game.surfaces[surface_index].name.."/"..name)
+    --debug("Ignoring new station: ", game.surfaces[surface_index].name.."/"..name)
   end
 end
 
@@ -155,12 +155,14 @@ end
 
 -- Scrub list of trains
 function scrub_trains()
+  -- Look for trains awaiting dispatch that disappeared during configuration change
   for id,ad in pairs(global.awaiting_dispatch) do
     if not(ad.train and ad.train.valid) then
       global.awaiting_dispatch[id] = nil
       debug("Scrubbed train " .. id .. " from Awaiting Dispatch list.")
     end
   end
+  -- Migrate currently dispatched trains to use temporary stops, so we don't have to track them anymore
   if global.dispatched then
     for id,d in pairs(global.dispatched) do
       if not(d.train and d.train.valid) then
@@ -177,17 +179,17 @@ function scrub_trains()
         else
           debug("Did not convert train"..id.." to temporary destination.")
         end
-        
       end
     end
   end
 end
 
+
 -- Track train state change
 function train_changed_state(event)
   local train = event.train
   local id = train.id
-  
+
   -- A train that is awaiting dispatch cannot change state
   if global.awaiting_dispatch[id] then
     -- If the train mode has been set to manual mode, then we need to reset the train schedule
@@ -200,18 +202,11 @@ function train_changed_state(event)
     end
     global.awaiting_dispatch[id] = nil
   end
-  
-  local train_schedule = train.schedule
-
-  -- Ensure that dispatched train are going to the chosen destination
-  --if global.dispatched[id] and (not train_schedule or global.dispatched[id].current ~= train_schedule.current) then
-  --  reset_station(id)
-  --  debug("Train #", id, " is no longer being dispatched: schedule reset")
-  --end
 
   -- When a train arrives at a dispatcher
+  local train_schedule = train.schedule
   local train_station = train.station
-  if train.state == defines.train_state.wait_station and train_station and train_station.name == "train-stop-dispatcher" then
+  if train.state == defines.train_state.wait_station and train_station and train_station.name == NAME_DISPATCHER_ENTITY then
     -- Add the train to the global variable storing all the trains awaiting dispatch
     global.awaiting_dispatch[id] = {train=train, station=train_station, schedule=train_schedule}
     -- Change the train schedule so that the train stays at the station
@@ -220,7 +215,6 @@ function train_changed_state(event)
   end
 end
 script.on_event(defines.events.on_train_changed_state, train_changed_state)
-
 
 
 -- Track uncoupled trains (because the train id changes)
@@ -244,46 +238,17 @@ function train_created(event)
       global.awaiting_dispatch[event.old_train_id_2] = nil
       global.awaiting_dispatch[event.old_train_id_1] = nil
     end
-    --d = nil
-    --if global.dispatched[event.old_train_id_1] then
-    --  d = global.dispatched[event.old_train_id_1]
-    --elseif global.dispatched[event.old_train_id_2] then
-    --  d = global.dispatched[event.old_train_id_2]
-    --end
-    --if d then
-    --  if event.train.schedule then
-    --    global.dispatched[event.train.id] = {train=event.train, station=d.station, current=d.current}
-    --    event.train.manual_mode = false
-    --    debug("Train #", event.old_train_id_1, " and #", event.old_train_id_2, " merged while being dispatched: new train #", event.train.id, " is being dispatched")
-    --  else
-    --    debug("Train #", event.old_train_id_1, " and #", event.old_train_id_2, " merged while being dispatched: new train #", event.train.id, " is no longer dispatched because it has no schedule")
-    --  end
-    --  global.dispatched[event.old_train_id_1] = nil
-    --  global.dispatched[event.old_train_id_2] = nil
-    --end
   elseif event.old_train_id_1 then
     if global.awaiting_dispatch[event.old_train_id_1] then
       ad = global.awaiting_dispatch[event.old_train_id_1]
       event.train.schedule = ad.schedule
       if has_locos(event.train) then
         event.train.manual_mode = false
-        --global.dispatched[event.old_train_id_1] = nil
         debug("Train #", event.old_train_id_1, " was split to create train #", event.train.id, " while awaiting dispatch: train schedule reset, and mode set to automatic")
       else
         debug("Train #", event.old_train_id_1, " was split to create train #", event.train.id, " while awaiting dispatch: train schedule reset, and mode set to manual because it has no locomotives")
       end
     end
-    --if global.dispatched[event.old_train_id_1] then
-    --  if has_locos(event.train) then
-    --    d = global.dispatched[event.old_train_id_1]
-    --    global.dispatched[event.train.id] = {train=event.train, station=d.station, current=d.current}
-    --    event.train.manual_mode = false
-    --    global.dispatched[event.old_train_id_1] = nil
-    --    debug("Train #", event.old_train_id_1, " was split to create train #", event.train.id, " while being dispatched: train schedule reset, and mode set to automatic")
-    --  else
-    --    debug("Train #", event.old_train_id_1, " was split to create train #", event.train.id, " while being dispatched: no longer dispatched, and mode set to manual because it has no locomotives")
-    --  end
-    --end
   end
 end
 script.on_event(defines.events.on_train_created, train_created)
@@ -308,7 +273,7 @@ function tick()
 
       -- Get the dispatch signal at the dispatcher
       local signal = v.station.get_merged_signal(SIGNAL_DISPATCH)
-      
+
       if signal then
         local name = v.station.backer_name .. "." .. tostring(signal)
         local surface_index = v.station.surface.index
@@ -349,14 +314,6 @@ function tick()
             -- This train is not awaiting dispatch any more
             global.awaiting_dispatch[i] = nil
 
-            -- If the train was sent to this dispatcher by another dispatcher, we need to update the train schedule and the dispatched variable
-            --if global.dispatched[i] then
-            --  reset_station(i)
-            --end
-
-            -- Store the dispatched train
-            --global.dispatched[i] = {train=v.train, station=name, current=v.train.schedule.current}
-
             for _, player in pairs(game.players) do
               player.create_local_flying_text({text="Train dispatched to "..name, position=v.station.position, speed=1, time_to_live=200})
             end
@@ -372,38 +329,6 @@ function tick()
   end
 end
 script.on_event(defines.events.on_tick, tick)
-
-
--- Reset train schedule after a train has reached its destination
---function reset_station(id)
---  -- If new train has no schedule, do not give it one and remove it from dispatching list.
---  if global.dispatched[id].train.schedule then
---    local schedule = global.dispatched[id].train.schedule
---    
---    -- Only reset the train schedule if it has reached the correct station
---    if schedule.records[global.dispatched[id].current] and schedule.records[global.dispatched[id].current].station == global.dispatched[id].station and not schedule.records[global.dispatched[id].current].temporary then
---
---      -- Remove destination station from schedule
---      table.remove(schedule.records, global.dispatched[id].current)
---
---      -- If the current station is after the destination station
---      if schedule.current > global.dispatched[id].current then
---        schedule.current = schedule.current - 1
---      end
---
---      -- Reset train schedule
---      debug("Resetting train schedule for ID "..tostring(id))
---      global.dispatched[id].train.schedule = schedule
---      if has_locos(global.dispatched[id].train) then
---        global.dispatched[id].train.manual_mode = false
---      else
---        global.dispatched[id].train.manual_mode = true
---      end
---    end
---  end
---
---  global.dispatched[id] = nil
---end
 
 -- Check for any locomotives in the train
 function has_locos(train)
@@ -468,20 +393,5 @@ function cmd_debug(params)
   end
 end
 commands.add_command("dispatcher-debug", {"command-help.dispatcher-debug"}, cmd_debug)
-
-------------------------------------------------------------------------------------
---                    FIND LOCAL VARIABLES THAT ARE USED GLOBALLY                 --
---                              (Thanks to eradicator!)                           --
-------------------------------------------------------------------------------------
-setmetatable(_ENV,{
-  __newindex=function (self,key,value) --locked_global_write
-    error('\n\n[ER Global Lock] Forbidden global *write*:\n'
-      .. serpent.line{key=key or '<nil>',value=value or '<nil>'}..'\n')
-    end,
-  __index   =function (self,key) --locked_global_read
-    error('\n\n[ER Global Lock] Forbidden global *read*:\n'
-      .. serpent.line{key=key or '<nil>'}..'\n')
-    end ,
-  })
 
 if script.active_mods["gvv"] then require("__gvv__.gvv")() end
