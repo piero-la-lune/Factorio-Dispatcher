@@ -210,7 +210,10 @@ function train_changed_state(event)
     -- Add the train to the global variable storing all the trains awaiting dispatch
     global.awaiting_dispatch[id] = {train=train, station=train_station, schedule=train_schedule}
     -- Change the train schedule so that the train stays at the station
-    train.schedule = {current=1, records={{station=train_station.backer_name, wait_conditions={{type="circuit", compare_type="or", condition={}}}}}}
+    local wait_schedule = table.deepcopy(train_schedule)
+    table.insert(wait_schedule.records, wait_schedule.current + 1, {station=train_station.backer_name, temporary=true, wait_conditions={{type="circuit", compare_type="or", condition={}}}})
+    wait_schedule.current = wait_schedule.current + 1
+    train.schedule = wait_schedule
     debug("Train #", id, " has arrived to dispatcher '", train_station.backer_name, "': awaiting dispatch")
   end
 end
