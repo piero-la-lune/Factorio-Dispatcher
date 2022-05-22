@@ -2,6 +2,7 @@ require("util")
 
 local NAME_DISPATCHER_ENTITY = "train-stop-dispatcher"
 local SIGNAL_DISPATCH = {type="virtual", name="dispatcher-station"}
+local NAME_SEPARATOR = "."
 local NAME_SEPARATOR_REGEX = "%."
 
 -- Initiate global variables when activating the mod
@@ -30,7 +31,8 @@ script.on_configuration_changed(function(data)
         global.debug = false
       end
     end
-    -- TODO: remove this
+
+    local debug_temp = global.debug
     global.debug = true
 
     -- Build the list of stations on the map
@@ -41,12 +43,14 @@ script.on_configuration_changed(function(data)
     -- Complete the migration if no dispatched trains remain in list
     if global.dispatched then
       if next(global.dispatched) then
-        debug("Dispatcher: Warning! Could not migrate all dispatched trains. Please upload save file to the Dispatcher mod page.")
+        debug("Dispatcher: WARNING! Could not migrate all dispatched trains. Please upload save file to the Dispatcher mod page.")
       else
         debug("Dispatcher: Completed migrating dispatched trains to temporary schedule records.")
         global.dispatched = nil
       end
     end
+
+    global.debug = debug_temp
   end
 end)
 
@@ -110,10 +114,10 @@ function entity_cloned(event)
     add_station(entity)
   elseif entity.type == "locomotive" and event.source then
     local previous_id = event.source.train.id
-    if global.awaiting_dispatch[previous_id] then
+    if global.awaiting_dispatch[previous_id] and global.awaiting_dispatch[previous_id].schedule then
       -- Copy saved schedule from source to the cloned train, because it starts in manual mode
       local new_train = entity.train
-      debug("Cloning saving schedule from train "..tostring(previous_id).." to train "..tostring(new_train.id)..": "..serpent.line(global.awaiting_dispatch[previous_id].schedule))
+      debug("Cloning saved schedule from train "..tostring(previous_id).." to train "..tostring(new_train.id)..": "..serpent.line(global.awaiting_dispatch[previous_id].schedule))
       new_train.schedule = global.awaiting_dispatch[previous_id].schedule
     end
   end
@@ -190,31 +194,66 @@ function train_changed_state(event)
   local train = event.train
   local id = train.id
 
-  -- A train that is awaiting dispatch cannot change state
+  -- A train that is awaiting dispatch cannot change state. Restore schedule if appropriate
   if global.awaiting_dispatch[id] then
-    -- If the train mode has been set to manual mode, then we need to reset the train schedule
-    if train.manual_mode then
+    local station_name = global.awaiting_dispatch[id].station_name
+    local train_schedule = train.schedule
+    if global.awaiting_dispatch[id].schedule then
+      -- There is a stored schedule, restore it
       local schedule = global.awaiting_dispatch[id].schedule
       train.schedule = schedule
-      debug("Train #", id, " set to manual mode while awaiting dispatch: schedule reset")
+      if train.manual_mode then
+        debug("Train #", id, " set to manual mode while awaiting dispatch: schedule reset")
+      elseif not global.awaiting_dispatch[id].station or not global.awaiting_dispatch[id].station.valid then
+        debug("Train #", id, " was waiting at a dispatcher that no longer exists: schedule reset")
+      else
+        debug("Train #", id, " left the dispatcher: schedule reset")
+      end
     else
-      debug("Train #", id, " schedule changed while awaiting dispatch: train not awaiting dispatch anymore but schedule not reset")
+      -- Schedule was either completely overwritten, or player sent train to another stop
+      -- Try to find the temporary waiting station we added and remove it
+      local found = false
+      for i=1,#train_schedule.records do
+        if train_schedule.records[i].temporary and train_schedule.records[i].station == station_name then
+          table.remove(train_schedule.records, i)
+          -- If train was pathing to the waiting stop, send it to the previous record (the actual dispatcher arrival)
+          if train_schedule.current >= i then
+            train_schedule.current = train_schedule.current - 1
+          end
+          found = true
+          break
+        end
+      end
+      if found then
+        train.schedule = train_schedule
+        if train.manual_mode then
+          debug("Train #", id, " set to manual mode while awaiting dispatch: schedule reset")
+        elseif not global.awaiting_dispatch[id].station or not global.awaiting_dispatch[id].station.valid then
+          debug("Train #", id, " was waiting at a dispatcher that no longer exists: schedule reset")
+        else
+          debug("Train #", id, " left the dispatcher: schedule reset")
+        end
+      else
+        debug("Dispatcher: WARNING! Train #", id, " no longer awaiting dispatch but schedule was not reset.")
+      end
     end
     global.awaiting_dispatch[id] = nil
   end
 
   -- When a train arrives at a dispatcher
-  local train_schedule = train.schedule
   local train_station = train.station
   if train.state == defines.train_state.wait_station and train_station and train_station.name == NAME_DISPATCHER_ENTITY then
     -- Add the train to the global variable storing all the trains awaiting dispatch
-    global.awaiting_dispatch[id] = {train=train, station=train_station, schedule=train_schedule}
+    local station_name = train_station.backer_name
+    global.awaiting_dispatch[id] = {train=train, station=train_station, station_name=station_name}
+
     -- Change the train schedule so that the train stays at the station
-    local wait_schedule = table.deepcopy(train_schedule)
-    table.insert(wait_schedule.records, wait_schedule.current + 1, {station=train_station.backer_name, temporary=true, wait_conditions={{type="circuit", compare_type="or", condition={}}}})
+    local wait_schedule = train.schedule
+    table.insert(wait_schedule.records, wait_schedule.current + 1,
+      {station=station_name, temporary=true, wait_conditions={{type="circuit", compare_type="or", condition={}}}})
     wait_schedule.current = wait_schedule.current + 1
     train.schedule = wait_schedule
-    debug("Train #", id, " has arrived to dispatcher '", train_station.backer_name, "': awaiting dispatch")
+    debug("Train #", id, " has arrived to dispatcher ", train_station.surface.name, "/", station_name, ": awaiting dispatch")
   end
 end
 script.on_event(defines.events.on_train_changed_state, train_changed_state)
@@ -259,27 +298,22 @@ script.on_event(defines.events.on_train_created, train_created)
 
 -- Executed every tick
 function tick()
-  for i,v in pairs(global.awaiting_dispatch) do
+  for id,ad in pairs(global.awaiting_dispatch) do
 
     -- Ensure that the train still exists
-    if not v.train.valid then
-      global.awaiting_dispatch[i] = nil
-      debug("Train #", i, " no longer exists: removed from awaiting dispatch list")
-
-    -- Ensure that the dispatcher still exists, if not reset the train schedule
-    elseif not v.station.valid then
-      v.train.schedule = v.schedule
-      global.awaiting_dispatch[i] = nil
-      debug("Train #", v.train.id, " is awaiting at a dispatcher that no longer exists: schedule reset and train removed from awaiting dispatch list")
+    if not ad.train or not ad.train.valid then
+      global.awaiting_dispatch[id] = nil
+      debug("Train #", id, " no longer exists: removed from awaiting dispatch list")
 
     else
+      -- Get the dispatch signal at the dispatcher, check if it is a positive number
+      local signal = ad.station.get_merged_signal(SIGNAL_DISPATCH)
 
-      -- Get the dispatch signal at the dispatcher
-      local signal = v.station.get_merged_signal(SIGNAL_DISPATCH)
-
-      if signal then
-        local name = v.station.backer_name .. "." .. tostring(signal)
-        local surface_index = v.station.surface.index
+      if signal and signal > 0 then
+        local dispatcher_name = ad.station.backer_name
+        local name = dispatcher_name .. NAME_SEPARATOR .. tostring(signal)
+        local surface = ad.station.surface
+        local surface_index = surface.index
 
         if global.stations[surface_index] and global.stations[surface_index][name] then
 
@@ -298,34 +332,55 @@ function tick()
           end
 
           if found then
-            -- Stored schedule from train when it arrived
-            local current = v.schedule.current
-            local records = v.schedule.records
+            -- Get schedule of waiting train
+            local train_schedule = ad.train.schedule
+            if (train_schedule.current > 1 and
+                train_schedule.records[train_schedule.current].temporary and
+                train_schedule.records[train_schedule.current-1].station == dispatcher_name) then
 
-            -- Check if it was a temporary record that brought us here.
-            if records[current].temporary then
-              -- Replace this temporary record with another, keeping the same wait conditions
-              records[current].station = name
+              -- Currently at a temporary waiting stop. Delete it.
+              table.remove(train_schedule.records, train_schedule.current)
+              train_schedule.current = train_schedule.current - 1
+
+            elseif ad.schedule then
+              -- Waiting at a real stop or the schedule got messed up. Use stored schedule
+              train_schedule = ad.schedule
+
             else
-              -- Insert the destination station to the train schedule
-              table.insert(records, current + 1, {station=name, wait_conditions=records[current].wait_conditions, temporary=true})
-              current = current + 1
+              debug("Dispatcher: WARNING! Train "..id.." waiting at "..dispatcher_name.." could not be dispatched because schedule is missing.")
+              train_schedule = nil
             end
-            v.train.schedule = {current=current, records=records}
-            v.train.manual_mode = false
+
+            if train_schedule then
+              if train_schedule.records[train_schedule.current].temporary then
+                -- Arrived at this dispatcher with a temporary stop. Replace it with the dispatched destination, conditions stay the same.
+                train_schedule.records[train_schedule.current].station = name
+              else
+                -- Arrived at this dispatcher with a permanent stop. Add the temporary dispatched destination and copy the conditions.
+                table.insert(train_schedule.records, train_schedule.current + 1,
+                  {station=name, temporary=true, wait_conditions=train_schedule.records[train_schedule.current].wait_conditions} )
+                train_schedule.current = train_schedule.current + 1
+              end
+
+              ad.train.schedule = train_schedule
+              ad.train.manual_mode = false
+
+              for _, player in pairs(game.players) do
+                if player.surface == surface then
+                  player.create_local_flying_text({text={"dispatcher.train-dispatched-message",id,name}, position=ad.station.position, speed=1, time_to_live=200})
+                end
+              end
+              debug("Train #", id, " has been dispatched to station "..surface.name.."/"..name)
+            end
 
             -- This train is not awaiting dispatch any more
-            global.awaiting_dispatch[i] = nil
+            global.awaiting_dispatch[id] = nil
 
-            for _, player in pairs(game.players) do
-              player.create_local_flying_text({text="Train dispatched to "..name, position=v.station.position, speed=1, time_to_live=200})
-            end
-            debug("Train #", v.train.id, " has been dispatched to station '", name, "'")
           else
-            --debug("Train #", v.train.id, " can't find any enabled station '", name, "'")
+            --debug("Train #", ad.train.id, " can't find any enabled station '", name, "'")
           end
         else
-          --debug("Train #", v.train.id, " can't find any station named '", name, "'")
+          --debug("Train #", ad.train.id, " can't find any station named '", name, "'")
         end
       end
     end
